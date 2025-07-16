@@ -33,7 +33,7 @@ view = st.sidebar.radio(
 
 # --- Aba: Storytelling ---
 if view == "Resumo Aplicação":
-    st.header("📖 Storytelling: Problema e Solução")
+    st.header("Análise Geral do Projeto")
     st.markdown("""
         **Problema**  
         - Histórico diário de vendas por SKU, mas demanda futura incerta.  
@@ -59,7 +59,7 @@ if view == "Resumo Aplicação":
 
 # --- Aba: Resumo Diário ---
 elif view == "Resumo Diário":
-    st.header("📈 Resumo Diário Agregado")
+    st.header("Resumo Diário Agregado")
 
     # filtro de período
     start_date, end_date = st.sidebar.date_input(
@@ -119,7 +119,7 @@ elif view == "Resumo Diário":
 
 # --- Aba: Por SKU ---
 elif view == "Por SKU":
-    st.header("🔎 Forecast por SKU")
+    st.header("Forecast por SKU")
     df = load_csv("data/models/reconciled_sku_forecast.csv", date_col="data")
     skus = sorted(df["sku"].unique())
     sku = st.sidebar.selectbox("Escolha o SKU", skus)
@@ -173,7 +173,7 @@ elif view == "Por SKU":
 
 # --- Aba: Métricas ---
 else:
-    st.header("📊 Avaliação de Métricas")
+    st.header("Avaliação de Métricas")
     df = load_csv("data/models/metrics_report.csv")
 
     # filtro de nível, default = granular
