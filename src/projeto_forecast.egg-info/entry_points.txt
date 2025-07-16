@@ -1,0 +1,10 @@
+[console_scripts]
+forecast-clean = preprocessing.clean:main
+forecast-dashboard = visualization.app:main
+forecast-evaluate = evaluation.metrics:main
+forecast-features = features.make_features:main
+forecast-load = ingestion.loader:main
+forecast-reconcile = models.reconcile:main
+forecast-sku = scripts.run_sku_forecaster:main
+forecast-train-cb = models.train_catboost:main
+forecast-train-lgbm = models.train_lgbm:main

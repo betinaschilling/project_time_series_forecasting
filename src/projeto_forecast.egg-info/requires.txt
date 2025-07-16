@@ -1,0 +1,10 @@
+pandas>=2.0
+numpy>=1.23
+statsmodels>=0.14
+lightgbm>=4.0
+catboost>=1.0
+scikit-learn>=1.0
+pyarrow>=8.0.0
+deltalake>=0.13
+pyspark>=3.4.0
+delta-spark>=2.3.0

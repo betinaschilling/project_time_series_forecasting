@@ -1,0 +1,26 @@
+Metadata-Version: 2.4
+Name: projeto_forecast
+Version: 0.1
+Summary: Pipeline de previsão de demanda modular em Python
+Author: Cheila Santos
+Author-email: betina.ssc@gmail.com
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.8
+Requires-Dist: pandas>=2.0
+Requires-Dist: numpy>=1.23
+Requires-Dist: statsmodels>=0.14
+Requires-Dist: lightgbm>=4.0
+Requires-Dist: catboost>=1.0
+Requires-Dist: scikit-learn>=1.0
+Requires-Dist: pyarrow>=8.0.0
+Requires-Dist: deltalake>=0.13
+Requires-Dist: pyspark>=3.4.0
+Requires-Dist: delta-spark>=2.3.0
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
