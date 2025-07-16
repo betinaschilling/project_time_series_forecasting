@@ -171,3 +171,7 @@ forecast-sku
 forecast-dashboard
 
 
+## Site para acesso a aplicaçao:
+https://sales-forecasting-for-sku.streamlit.app/
+
+

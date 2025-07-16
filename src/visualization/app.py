@@ -35,24 +35,26 @@ view = st.sidebar.radio(
 if view == "Resumo Aplicação":
     st.header("📖 Storytelling: Problema e Solução")
     st.markdown("""
-    **Problema**  
-    - Temos histórico diário de vendas por SKU, mas precisamos antecipar demanda.  
-    - SKU novos não têm histórico; produtos sazonais e atemporais se comportam de forma distinta.  
-    - Precisamos de forecasts granular (por SKU) e agregado, além de um método de reconciliação para garantir consistência.
+        **Problema**  
+        - Histórico diário de vendas por SKU, mas demanda futura incerta.  
+        - SKUs novos sem dados históricos; sazonalidade e comportamento diversificado.  
+        - Necessidade de forecasts granulares e agregados, com reconciliação para consistência.
 
-    **Solução**  
-    1. **Ingestão & Pré-processamento**:  
-       - Leitura do CSV bruto, expansão de datas (zero-fill), limpeza de outliers.  
-    2. **Feature Engineering**:  
-       - Lags, médias móveis, variáveis de calendário, flags de imputação.  
-    3. **Modelagem**:  
-       - LightGBM e CatBoost em granular; agregação por nível diário.  
-    4. **Reconciliação**:  
-       - Média simples de forecast LGBM+CatBoost ajustada por quota histórica.  
-    5. **Avaliação**:  
-       - RMSE, MAE, MAPE, WMAPE e R² em granular e agregado.  
-    6. **Visualização**:  
-       - Streamlit com filtros, formatação e storytelling em uma única aplicação.  
+        **Solução**  
+        1. **Ingestão & Pré-processamento**  
+           - Leitura do CSV bruto; expansão de datas (zero-fill); limpeza de outliers.  
+        2. **Feature Engineering**  
+           - Geração de lags, médias móveis, variáveis de calendário e flags de imputação.  
+        3. **Modelagem**  
+           - Treino de LightGBM e CatBoost no nível SKU; previsão granular e agregada.  
+        4. **Reconciliação**  
+           - Combinação (média) de LGBM + CatBoost ajustada por quota histórica.  
+        5. **Avaliação**  
+           - Cálculo de RMSE, MAE, MAPE, WMAPE e R² em granular e agregado.  
+        6. **Visualização**  
+           - Dashboard em Streamlit: filtros, formatação e storytelling integrado. 
+
+        Github: https://github.com/betinaschilling/project_time_series_forecasting 
     """)
 
 # --- Aba: Resumo Diário ---

@@ -144,4 +144,29 @@ Esta documentação descreve todo o fluxo de trabalho implementado para a soluç
 
 ---
 
+### 9. Forecast por SKU
+- **O quê**  
+  Gera previsões diárias de vendas para um único SKU, incluindo:  
+  1. **Fitted** (in-sample) – aplica os modelos treinados sobre o histórico de features.  
+  2. **Forecast** (horizonte futuro) – reconstrói recursivamente as features dos próximos dias e prevê as vendas.
+
+- **Por que**  
+  Permite analisar individualmente o comportamento de cada produto, validar o ajuste dos modelos no histórico e planejar estoque específico por SKU.
+
+- **Principais funções/métodos**  
+  - `main()` – recebe o código do SKU e caminhos de entrada/saída, instancia `SKUForecaster` e chama `run()`.  
+  - `SKUForecaster.load_models()` – carrega os objetos LightGBM e CatBoost do disco.  
+  - `SKUForecaster.load_data()` – lê e filtra histórico processado e features apenas para o SKU selecionado.  
+  - `SKUForecaster.forecast()` –  
+    - monta previsões “in-sample” (fitted) usando todo o histórico de features,  
+    - gera previsões recursivas para o horizonte configurado (por padrão 7 dias),  
+    - concatena ambos em um único DataFrame.  
+  - `SKUForecaster.save()` – salva o resultado em `data/models/forecast_sku_<SKU>.csv` com colunas:  
+    `sku`, `data`, `lgbm_fitted`, `cb_fitted`, `lgbm_forecast`, `cb_forecast`.  
+
+
+## Site para acesso a aplicaçao:
+https://sales-forecasting-for-sku.streamlit.app/
+
+
 *Atualize esta documentação sempre que novas etapas ou funções forem adicionadas ao projeto.*  
