@@ -40,38 +40,8 @@ Cada etapa é acionada por um script CLI instalado via `setup.py` (ex: `forecast
 
 ## Estrutura de Pastas e Scripts
 
-project_time_series_forecasting/
-├─ data/
-│  ├─ processed/
-│  │  └─ vendas_processed.csv/.delta/…
-│  ├─ features/
-│  │  └─ vendas_features.csv/.delta/…
-│  ├─ interim/
-│  └─ models/
-│     ├─ ml_forecast.csv
-│     ├─ catboost_forecast.csv
-│     ├─ reconciled_sku_forecast.csv
-│     └─ reconciled_daily_summary.csv
-├─ notebooks/
-├─ src/
-│  ├─ ingestion/
-│  │  └─ loader.py
-│  ├─ preprocessing/
-│  │  └─ clean.py
-│  ├─ features/
-│  │  └─ make_features.py
-│  ├─ models/
-│  │  ├─ train_lgbm.py
-│  │  ├─ train_catboost.py
-│  │  └─ reconcile.py --> Média do desempenho dos modelos
-│  ├─ evaluation/
-│  │  └─ metrics.py
-│  ├─ scripts/
-│  │  └─ run_sku_forecaster.py --> Função para Gerar o forecast por SKU.
-│  └─ visualization/
-│     └─ app.py --> Realizado x Previsto
-├─ setup.py
-└─ README.md
+<img width="739" height="859" alt="image" src="https://github.com/user-attachments/assets/31486475-270e-4abf-92df-16318fdf3350" />
+
 
 
 ---
@@ -163,8 +133,8 @@ pip install -e .        # instala dependências e entry points
 forecast-load
 forecast-clean
 forecast-features
-forecast-train
-forecast-train
+forecast-train-lgbm
+forecast-train-cb
 forecast-reconcile
 forecast-evaluate
 forecast-sku
