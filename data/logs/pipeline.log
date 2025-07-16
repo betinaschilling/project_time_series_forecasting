@@ -1567,3 +1567,124 @@ py4j.protocol.Py4JJavaError: An error occurred while calling o41.select.
 2025-07-16 05:20:20 [INFO] pipeline - Gerado forecast SKU=1 com 91 linhas
 2025-07-16 05:20:20 [INFO] pipeline - Forecast SKU salvo em data/models/forecast_sku_1.csv
 2025-07-16 05:20:20 [INFO] pipeline - ==== FIM FORECAST SKU=1 ====
+2025-07-16 07:14:45 INFO configuração de logging concluída
+2025-07-16 07:14:45 INFO ==== INÍCIO DA ETAPA DE INGESTÃO ====
+2025-07-16 07:14:51 INFO SparkSession com suporte a Delta iniciada
+2025-07-16 07:14:55 INFO raw data carregada: 135226 linhas, 3 colunas
+2025-07-16 07:14:56 INFO interim CSV salvo em data/interim/vendas_interim.csv
+2025-07-16 07:15:03 INFO interim Delta salvo em data/interim/vendas_interim.delta
+2025-07-16 07:15:03 INFO ==== FIM DA ETAPA DE INGESTÃO ====
+2025-07-16 07:15:03 INFO ingestão concluída com sucesso
+2025-07-16 07:15:03 INFO SparkSession finalizada
+2025-07-16 07:15:03 INFO Closing down clientserver connection
+2025-07-16 07:15:09 [INFO] pipeline - ==== CONFIGURAÇÃO DE LOG DE PREPROCESSAMENTO ====
+2025-07-16 07:15:15 [INFO] pipeline - SparkSession com suporte a Delta iniciada
+2025-07-16 07:15:15 [INFO] pipeline - ==== INÍCIO DA ETAPA DE PREPROCESSAMENTO ====
+2025-07-16 07:15:15 [INFO] pipeline - lendo Delta de entrada em data/interim/vendas_interim.delta
+2025-07-16 07:15:22 [INFO] pipeline - dados brutos carregados: 135226 linhas
+2025-07-16 07:15:22 [INFO] pipeline - agrupadas duplicatas por sku+data
+2025-07-16 07:15:22 [INFO] pipeline - gerada malha completa de datas por SKU
+2025-07-16 07:15:22 [INFO] pipeline - marcado campo is_imputed
+2025-07-16 07:15:22 [INFO] pipeline - preenchidos valores nulos de venda com zero
+2025-07-16 07:15:22 [INFO] pipeline - ordenado por sku e data
+2025-07-16 07:15:26 [INFO] pipeline - CSV processado salvo em data/processed/vendas_processed.csv
+2025-07-16 07:15:30 [INFO] pipeline - Delta processado salvo em data/processed/vendas_processed.delta
+2025-07-16 07:15:30 [INFO] pipeline - ==== FIM DA ETAPA DE PREPROCESSAMENTO ====
+2025-07-16 07:15:30 [INFO] pipeline - SparkSession finalizada
+2025-07-16 07:15:30 [INFO] py4j.clientserver - Closing down clientserver connection
+2025-07-16 07:15:42 [INFO] pipeline - ==== CONFIGURAÇÃO DE LOG DE FEATURE ENGINEERING ====
+2025-07-16 07:15:48 [INFO] pipeline - SparkSession com suporte a Delta iniciada para features
+2025-07-16 07:15:48 [INFO] pipeline - ==== INÍCIO DA FEATURE ENGINEERING ====
+2025-07-16 07:15:48 [INFO] pipeline - Features: lendo Delta de entrada em data/processed/vendas_processed.delta
+2025-07-16 07:15:55 [INFO] pipeline - Features: dados brutos carregados (230704 linhas)
+2025-07-16 07:15:55 [INFO] pipeline - Features: flag de imputação criado
+2025-07-16 07:15:55 [INFO] pipeline - Features: lags [1, 7, 14] criados
+2025-07-16 07:15:56 [INFO] pipeline - Features: rolling windows [7, 14, 30] criados
+2025-07-16 07:15:56 [INFO] pipeline - Features: variáveis de calendário criadas
+2025-07-16 07:15:59 [INFO] pipeline - Features: CSV salvo em data/features/vendas_features.csv
+2025-07-16 07:16:03 [INFO] pipeline - Features: Delta salvo em data/features/vendas_features.delta
+2025-07-16 07:16:03 [INFO] pipeline - ==== FIM DA FEATURE ENGINEERING ====
+2025-07-16 07:16:03 [INFO] pipeline - SparkSession finalizada
+2025-07-16 07:16:03 [INFO] py4j.clientserver - Closing down clientserver connection
+2025-07-16 07:16:12 [INFO] pipeline - ==== INÍCIO LIGHTGBM ====
+2025-07-16 07:16:12 [INFO] pipeline - Dados brutos carregados: (230704, 14)
+2025-07-16 07:16:14 [INFO] pipeline - Features geradas: (230704, 14)
+2025-07-16 07:16:14 [INFO] pipeline - Colunas de feature: ['is_imputed', 'was_imputed', 'lag_1', 'lag_7', 'lag_14', 'roll_mean_7', 'roll_mean_14', 'roll_mean_30', 'weekday', 'is_weekend', 'month']
+2025-07-16 07:16:15 [INFO] pipeline - fold 1 RMSE 5.1329
+2025-07-16 07:16:16 [INFO] pipeline - fold 2 RMSE 6.2467
+2025-07-16 07:16:17 [INFO] pipeline - fold 3 RMSE 79.7516
+2025-07-16 07:16:18 [INFO] pipeline - fold 4 RMSE 4.9785
+2025-07-16 07:16:19 [INFO] pipeline - fold 5 RMSE 4.8937
+2025-07-16 07:16:19 [INFO] pipeline - CV RMSE média 20.2007
+2025-07-16 07:16:20 [INFO] pipeline - Modelo salvo em data/models/lgbm_model.pkl
+2025-07-16 07:16:22 [INFO] pipeline - Previsto dia 2024-04-09
+2025-07-16 07:16:24 [INFO] pipeline - Previsto dia 2024-04-10
+2025-07-16 07:16:26 [INFO] pipeline - Previsto dia 2024-04-11
+2025-07-16 07:16:28 [INFO] pipeline - Previsto dia 2024-04-12
+2025-07-16 07:16:29 [INFO] pipeline - Previsto dia 2024-04-13
+2025-07-16 07:16:31 [INFO] pipeline - Previsto dia 2024-04-14
+2025-07-16 07:16:33 [INFO] pipeline - Previsto dia 2024-04-15
+2025-07-16 07:16:33 [INFO] pipeline - Forecast salvo em data/models/ml_forecast.csv
+2025-07-16 07:16:41 [INFO] pipeline - ==== INÍCIO CATBOOST ====
+2025-07-16 07:16:41 [INFO] pipeline - Dados brutos carregados: (230704, 14)
+2025-07-16 07:16:43 [INFO] pipeline - Features geradas: (230704, 14)
+2025-07-16 07:16:43 [INFO] pipeline - Colunas de feature: ['is_imputed', 'was_imputed', 'lag_1', 'lag_7', 'lag_14', 'roll_mean_7', 'roll_mean_14', 'roll_mean_30', 'weekday', 'is_weekend', 'month']
+2025-07-16 07:16:44 [INFO] pipeline - fold 1 RMSE 5.2134
+2025-07-16 07:16:45 [INFO] pipeline - fold 2 RMSE 6.3197
+2025-07-16 07:16:45 [INFO] pipeline - fold 3 RMSE 80.1870
+2025-07-16 07:16:46 [INFO] pipeline - fold 4 RMSE 5.3907
+2025-07-16 07:16:47 [INFO] pipeline - fold 5 RMSE 5.2189
+2025-07-16 07:16:47 [INFO] pipeline - CV RMSE média 20.4659
+2025-07-16 07:16:50 [INFO] pipeline - Modelo salvo em data/models/catboost_model.cbm
+2025-07-16 07:16:52 [INFO] pipeline - Previsto dia 2024-04-09
+2025-07-16 07:16:53 [INFO] pipeline - Previsto dia 2024-04-10
+2025-07-16 07:16:55 [INFO] pipeline - Previsto dia 2024-04-11
+2025-07-16 07:16:57 [INFO] pipeline - Previsto dia 2024-04-12
+2025-07-16 07:16:58 [INFO] pipeline - Previsto dia 2024-04-13
+2025-07-16 07:17:00 [INFO] pipeline - Previsto dia 2024-04-14
+2025-07-16 07:17:02 [INFO] pipeline - Previsto dia 2024-04-15
+2025-07-16 07:17:02 [INFO] pipeline - Forecast salvo em data/models/catboost_forecast.csv
+2025-07-16 07:17:13 [INFO] pipeline - ==== CONFIGURAÇÃO DE LOG DE RECONCILIAÇÃO ====
+2025-07-16 07:17:13 [INFO] pipeline - ==== INÍCIO DA RECONCILIAÇÃO ====
+2025-07-16 07:17:13 [INFO] pipeline - Lendo forecast LightGBM de data/models/ml_forecast.csv
+2025-07-16 07:17:13 [INFO] pipeline - ML forecast: 240210 linhas
+2025-07-16 07:17:13 [INFO] pipeline - Lendo forecast CatBoost de data/models/catboost_forecast.csv
+2025-07-16 07:17:13 [INFO] pipeline - CatBoost forecast: 240210 linhas
+2025-07-16 07:17:13 [INFO] pipeline - Lendo histórico processado de data/processed/vendas_processed.csv
+2025-07-16 07:17:13 [INFO] pipeline - Histórico: 230704 linhas (arquivo: data/processed/vendas_processed.csv/part-00000-6f02ef85-1dea-4ae2-b3ea-c4faf2c779bb-c000.csv)
+2025-07-16 07:17:13 [INFO] pipeline - Criado campo 'reconciled' = média de lgbm_pred e cb_pred
+2025-07-16 07:17:13 [INFO] pipeline - Computado resumo diário agregado
+2025-07-16 07:17:14 [INFO] pipeline - Reconciled SKU-level salvo em data/models/reconciled_sku_forecast.csv
+2025-07-16 07:17:14 [INFO] pipeline - Reconciled daily summary salvo em data/models/reconciled_daily_summary.csv
+2025-07-16 07:17:14 [INFO] pipeline - ==== FIM DA RECONCILIAÇÃO ====
+2025-07-16 07:17:25 [INFO] pipeline - ==== CONFIGURAÇÃO DE LOG DE AVALIAÇÃO ====
+2025-07-16 07:17:25 [INFO] pipeline - ==== INÍCIO DA AVALIAÇÃO DE MÉTRICAS ====
+2025-07-16 07:17:25 [INFO] pipeline - ==== CARREGANDO DADOS PARA AVALIAÇÃO ====
+2025-07-16 07:17:25 [INFO] pipeline - Lido data/processed/vendas_processed.csv/part-00000-6f02ef85-1dea-4ae2-b3ea-c4faf2c779bb-c000.csv: 230704 linhas, 4 colunas
+2025-07-16 07:17:25 [INFO] pipeline - Lido data/models/ml_forecast.csv: 240210 linhas, 3 colunas
+2025-07-16 07:17:25 [INFO] pipeline - Lido data/models/catboost_forecast.csv: 240210 linhas, 3 colunas
+2025-07-16 07:17:25 [INFO] pipeline - Lido data/models/reconciled_sku_forecast.csv: 240210 linhas, 6 colunas
+2025-07-16 07:17:25 [INFO] pipeline - lgbm granular: {'rmse': 7.811415691738551, 'mae': 2.9708396018641117, 'r2': 0.9631759154876885, 'mape': np.float64(16.213734197184998), 'wmape': np.float64(19.449311029643642)}
+2025-07-16 07:17:25 [INFO] pipeline - lgbm aggregate: {'rmse': 3050.288541138267, 'mae': 2110.394269946974, 'r2': 0.9612587860286518, 'mape': np.float64(5.471137207253645), 'wmape': np.float64(5.150293071883756)}
+2025-07-16 07:17:25 [INFO] pipeline - catboost granular: {'rmse': 7.26416873984058, 'mae': 3.1833172156499354, 'r2': 0.9681547760956566, 'mape': np.float64(26.59869150105079), 'wmape': np.float64(20.840346477926992)}
+2025-07-16 07:17:25 [INFO] pipeline - catboost aggregate: {'rmse': 3444.4884227871694, 'mae': 2482.9131297057074, 'r2': 0.9505984201613915, 'mape': np.float64(6.431938659256674), 'wmape': np.float64(6.059403435706743)}
+2025-07-16 07:17:25 [INFO] pipeline - reconciled granular: {'rmse': 7.299259760204431, 'mae': 3.042721228576602, 'r2': 0.9678463635162216, 'mape': np.float64(20.517589540207407), 'wmape': np.float64(19.91990126762577)}
+2025-07-16 07:17:25 [INFO] pipeline - reconciled aggregate: {'rmse': 3221.5631630415396, 'mae': 2281.461934426957, 'r2': 0.9567859788383013, 'mape': np.float64(5.905939264575375), 'wmape': np.float64(5.567773643993501)}
+2025-07-16 07:17:25 [INFO] pipeline - Metrics report salvo em data/models/metrics_report.csv
+2025-07-16 07:17:25 [INFO] pipeline - ==== FIM DA AVALIAÇÃO DE MÉTRICAS ====
+2025-07-16 07:17:39 [INFO] pipeline - ==== INÍCIO FORECAST SKU=123 ====
+2025-07-16 07:17:40 [INFO] pipeline - Carregando LGBM de data/models/lgbm_model.pkl
+2025-07-16 07:17:40 [INFO] pipeline - Carregando CatBoost de data/models/catboost_model.cbm
+2025-07-16 07:17:40 [INFO] pipeline - Histórico SKU=123: 86 linhas (arquivo: data/processed/vendas_processed.csv/part-00000-6f02ef85-1dea-4ae2-b3ea-c4faf2c779bb-c000.csv)
+2025-07-16 07:17:40 [INFO] pipeline - Features SKU=123: 86 linhas (arquivo: data/features/vendas_features.csv/part-00000-23e9e07b-3eae-4576-8d15-d8680de06c9d-c000.csv)
+2025-07-16 07:17:40 [INFO] pipeline - Gerado forecast SKU=123 com 93 linhas
+2025-07-16 07:17:40 [INFO] pipeline - Forecast SKU salvo em data/models/forecast_sku_123.csv
+2025-07-16 07:17:40 [INFO] pipeline - ==== FIM FORECAST SKU=123 ====
+2025-07-16 07:17:50 [INFO] pipeline - ==== INÍCIO FORECAST SKU=2020 ====
+2025-07-16 07:17:50 [INFO] pipeline - Carregando LGBM de data/models/lgbm_model.pkl
+2025-07-16 07:17:50 [INFO] pipeline - Carregando CatBoost de data/models/catboost_model.cbm
+2025-07-16 07:17:50 [INFO] pipeline - Histórico SKU=2020: 82 linhas (arquivo: data/processed/vendas_processed.csv/part-00000-6f02ef85-1dea-4ae2-b3ea-c4faf2c779bb-c000.csv)
+2025-07-16 07:17:50 [INFO] pipeline - Features SKU=2020: 82 linhas (arquivo: data/features/vendas_features.csv/part-00000-23e9e07b-3eae-4576-8d15-d8680de06c9d-c000.csv)
+2025-07-16 07:17:50 [INFO] pipeline - Gerado forecast SKU=2020 com 89 linhas
+2025-07-16 07:17:50 [INFO] pipeline - Forecast SKU salvo em data/models/forecast_sku_2020.csv
+2025-07-16 07:17:50 [INFO] pipeline - ==== FIM FORECAST SKU=2020 ====
