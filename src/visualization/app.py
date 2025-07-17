@@ -23,7 +23,7 @@ def load_csv(path: str, date_col: str = None) -> pd.DataFrame:
     return pd.read_csv(f)
 
 # --- Título geral ---
-st.title("📊 Dashboard de Forecast de Vendas")
+st.title("Forecast de Vendas")
 
 # --- Menu lateral ---
 view = st.sidebar.radio(
