@@ -152,6 +152,15 @@ def page_title(title: str, subtitle: str, notebook: str):
     st.markdown(f'<div class="subtitle">{subtitle}</div>', unsafe_allow_html=True)
 
 
+def chart_header(title: str, explanation: str):
+    """Título compacto com balão de ajuda metodológica."""
+    label, help_column = st.columns([0.94, 0.06], vertical_alignment="center")
+    label.markdown(f"#### {title}")
+    with help_column:
+        with st.popover("ⓘ", help=f"Como interpretar {title}"):
+            st.markdown(explanation)
+
+
 @st.cache_data
 def load_csv(path: str, date_col: str | None = None) -> pd.DataFrame:
     candidate = Path(path)
@@ -498,15 +507,32 @@ def eda_view(sales: pd.DataFrame, profiles: pd.DataFrame):
     day_count = filtered["data"].nunique()
     active_per_day = positive.groupby("data")["sku"].nunique()
     metrics = st.columns(5)
-    metrics[0].metric("SKUs no recorte", f"{filtered['sku'].nunique():,}")
-    metrics[1].metric("Venda total", f"{filtered['venda'].sum():,.0f}")
+    metrics[0].metric(
+        "SKUs no recorte",
+        f"{filtered['sku'].nunique():,}",
+        help="Quantidade de SKUs pertencentes às categorias selecionadas e presentes no período.",
+    )
+    metrics[1].metric(
+        "Venda total",
+        f"{filtered['venda'].sum():,.0f}",
+        help="Soma da variável venda para os SKUs e datas selecionados.",
+    )
     metrics[2].metric(
         "SKUs vendidos/dia",
         f"{active_per_day.mean():,.0f}" if not active_per_day.empty else "—",
+        help="Média diária de SKUs com venda estritamente maior que zero.",
     )
     zero_share = filtered["venda"].le(0).mean() if len(filtered) else np.nan
-    metrics[3].metric("Registros sem venda", f"{zero_share:.1%}" if pd.notna(zero_share) else "—")
-    metrics[4].metric("Dias analisados", f"{day_count:,}")
+    metrics[3].metric(
+        "Registros sem venda",
+        f"{zero_share:.1%}" if pd.notna(zero_share) else "—",
+        help="Proporção de combinações SKU × data cuja venda foi zero.",
+    )
+    metrics[4].metric(
+        "Dias analisados",
+        f"{day_count:,}",
+        help="Número de datas distintas incluídas no período selecionado.",
+    )
 
     daily_sales = (
         filtered.groupby("data", as_index=False)
@@ -517,6 +543,12 @@ def eda_view(sales: pd.DataFrame, profiles: pd.DataFrame):
 
     left, right = st.columns([1.7, 1])
     with left:
+        chart_header(
+            "Comportamento das vendas no período",
+            "A linha diária mostra o volume observado em cada data. A média móvel de 7 dias "
+            "reduz oscilações pontuais e evidencia o nível recente da demanda; ela é descritiva "
+            "e não representa uma previsão.",
+        )
         temporal = daily_sales.melt(
             "data",
             value_vars=["vendas", "media_movel_7d"],
@@ -539,11 +571,16 @@ def eda_view(sales: pd.DataFrame, profiles: pd.DataFrame):
                 ),
                 tooltip=["data:T", "Série:N", alt.Tooltip("Vendas:Q", format=",.0f")],
             )
-            .properties(height=330, title="Comportamento das vendas no período")
+            .properties(height=300)
             .interactive()
         )
         st.altair_chart(style_chart(chart), use_container_width=True)
     with right:
+        chart_header(
+            "SKUs com venda por dia",
+            "Conta quantos SKUs tiveram venda maior que zero em cada data. O indicador mede "
+            "amplitude do sortimento ativo, não o volume vendido.",
+        )
         active = (
             alt.Chart(daily_sales)
             .mark_area(line={"color": YELLOW}, color=YELLOW, opacity=0.28)
@@ -552,7 +589,7 @@ def eda_view(sales: pd.DataFrame, profiles: pd.DataFrame):
                 y=alt.Y("skus_ativos:Q", title="SKUS ATIVOS"),
                 tooltip=["data:T", alt.Tooltip("skus_ativos:Q", title="SKUs")],
             )
-            .properties(height=330, title="SKUs com venda por dia")
+            .properties(height=300)
             .interactive()
         )
         st.altair_chart(style_chart(active), use_container_width=True)
@@ -571,6 +608,11 @@ def eda_view(sales: pd.DataFrame, profiles: pd.DataFrame):
 
     left, right = st.columns([1, 1.5])
     with left:
+        chart_header(
+            "Distribuição dos perfis",
+            "Mostra quantos SKUs pertencem a cada padrão ADI × CV². As categorias são "
+            "calculadas no histórico completo e permanecem fixas durante os filtros de período.",
+        )
         bars = (
             alt.Chart(counts)
             .mark_bar(size=25)
@@ -588,10 +630,16 @@ def eda_view(sales: pd.DataFrame, profiles: pd.DataFrame):
                     alt.Tooltip("participacao:Q", title="Participação", format=".1%"),
                 ],
             )
-            .properties(height=330, title="Distribuição dos perfis")
+            .properties(height=300)
         )
         st.altair_chart(style_chart(bars), use_container_width=True)
     with right:
+        chart_header(
+            "Mapa de frequência × variabilidade",
+            "**Eixo X — ADI:** intervalo médio entre dias com venda; quanto mais à direita, "
+            "mais espaçada é a demanda.\n\n**Eixo Y — CV²:** variabilidade do volume nos dias "
+            "em que houve venda; quanto mais acima, mais instável é o tamanho da demanda.",
+        )
         scatter_data = profiles.loc[
             np.isfinite(profiles["adi"]) & profiles["cv2"].notna()
         ].copy()
@@ -626,11 +674,27 @@ def eda_view(sales: pd.DataFrame, profiles: pd.DataFrame):
             hline = alt.Chart(pd.DataFrame({"y": [CV2_THRESHOLD]})).mark_rule(
                 color=INK, strokeDash=[5, 4]
             ).encode(y="y:Q")
-            chart = (points + vline + hline).properties(
-                height=330, title="Mapa de frequência × variabilidade"
-            ).interactive()
+            chart = (points + vline + hline).properties(height=300).interactive()
             st.altair_chart(style_chart(chart), use_container_width=True)
 
+    with st.expander("ⓘ Como interpretar os quadrantes do mapa ADI × CV²"):
+        st.markdown(
+            """
+            As linhas tracejadas representam os limites metodológicos **ADI = 1,32**
+            e **CV² = 0,49**.
+
+            | Região do mapa | Categoria | Racional |
+            |---|---|---|
+            | Inferior esquerda | **Regular** | Venda frequente e volume relativamente estável. |
+            | Superior esquerda | **Errática** | Venda frequente, porém com grande variação de volume. |
+            | Inferior direita | **Intermitente** | Muitos intervalos sem venda, mas volume relativamente estável quando ocorre. |
+            | Superior direita | **Irregular** | Venda espaçada e volume variável; é o padrão mais difícil de prever. |
+
+            Cada ponto representa um SKU. Pontos mais à direita apresentam vendas menos
+            frequentes; pontos mais altos possuem volumes mais voláteis. A classificação
+            descreve o histórico e não determina causalidade nem, isoladamente, o melhor modelo.
+            """
+        )
     st.caption(
         "ADI e CV² são calculados no histórico completo até a data de treinamento. "
         "O período altera os indicadores temporais, mas não redefine a categoria."
