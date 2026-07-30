@@ -46,3 +46,18 @@ def test_recursive_forecast_builds_next_date_before_prediction():
     second_date = pd.Timestamp("2025-01-09")
     assert snapshots.iloc[1]["lag_1"] == forecast.iloc[0]["prediction"]
     assert snapshots.iloc[1]["weekday"] == second_date.weekday()
+
+
+def test_recursive_forecast_discards_history_outside_required_lookback():
+    long_history = pd.concat(
+        [history()] * 10,
+        ignore_index=True,
+    )
+    long_history["data"] = pd.date_range("2024-01-01", periods=len(long_history))
+    forecast, _ = recursive_forecast(
+        model=LagWeekdayModel(),
+        history=long_history,
+        feature_columns=["lag_1", "weekday"],
+        horizon=1,
+    )
+    assert len(forecast) == 1
