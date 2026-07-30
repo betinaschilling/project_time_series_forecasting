@@ -10,6 +10,13 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+from eda.demand_profile import (
+    ADI_THRESHOLD,
+    CATEGORY_ORDER,
+    CV2_THRESHOLD,
+    classify_demand_profiles,
+)
+
 
 PAPER = "#f1ebdc"
 INK = "#171612"
@@ -17,6 +24,13 @@ RED = "#a43a2b"
 YELLOW = "#d3a329"
 GREY = "#656057"
 LINE = "rgba(23, 22, 18, .28)"
+CATEGORY_COLORS = {
+    "Regular": "#d3a329",
+    "Errática": "#c77f50",
+    "Intermitente": "#a43a2b",
+    "Irregular": "#171612",
+    "Sem demanda": "#8b857a",
+}
 
 FEATURE_LABELS = {
     "lag_1": "Venda D−1",
@@ -153,6 +167,97 @@ def existing_data(path: str, date_col: str | None = None) -> pd.DataFrame:
         return load_csv(path, date_col)
     except (FileNotFoundError, StopIteration, pd.errors.EmptyDataError):
         return pd.DataFrame()
+
+
+@st.cache_data
+def compute_demand_profiles(sales: pd.DataFrame) -> pd.DataFrame:
+    return classify_demand_profiles(sales)
+
+
+def filter_skus(frame: pd.DataFrame, skus: set[str]) -> pd.DataFrame:
+    if frame.empty or "sku" not in frame:
+        return frame
+    return frame.loc[frame["sku"].astype(str).isin(skus)].copy()
+
+
+def aggregate_daily(sku_data: pd.DataFrame) -> pd.DataFrame:
+    if sku_data.empty:
+        return pd.DataFrame()
+    aggregations = {}
+    for source, target in (
+        ("realized", "realized_total"),
+        ("lgbm_pred", "lgbm_total"),
+        ("cb_pred", "catboost_total"),
+        ("reconciled", "reconciled_total"),
+    ):
+        if source in sku_data:
+            aggregations[target] = (source, "sum")
+    if not aggregations:
+        return pd.DataFrame()
+    return sku_data.groupby("data").agg(**aggregations).reset_index()
+
+
+def metrics_for_skus(sku_data: pd.DataFrame, historical_end) -> pd.DataFrame:
+    required = {"data", "realized", "lgbm_pred", "cb_pred"}
+    if sku_data.empty or not required.issubset(sku_data):
+        return pd.DataFrame()
+    frame = sku_data.loc[pd.to_datetime(sku_data["data"]).le(historical_end)].copy()
+    frame["reconciled"] = frame[["lgbm_pred", "cb_pred"]].mean(axis=1)
+
+    def measures(y_true, y_pred):
+        y_true = pd.to_numeric(y_true, errors="coerce")
+        y_pred = pd.to_numeric(y_pred, errors="coerce")
+        valid = y_true.notna() & y_pred.notna()
+        y_true, y_pred = y_true[valid], y_pred[valid]
+        if y_true.empty:
+            return {}
+        error = y_true - y_pred
+        denominator = y_true.abs().sum()
+        variance = ((y_true - y_true.mean()) ** 2).sum()
+        return {
+            "rmse": float(np.sqrt(np.mean(error ** 2))),
+            "mae": float(np.mean(np.abs(error))),
+            "mape": float(np.mean(np.abs(error) / y_true.abs().replace(0, 1)) * 100),
+            "wmape": float(np.abs(error).sum() / denominator * 100) if denominator else np.nan,
+            "r2": float(1 - (error ** 2).sum() / variance) if variance else np.nan,
+        }
+
+    records = []
+    for name, column in (
+        ("lgbm", "lgbm_pred"),
+        ("catboost", "cb_pred"),
+        ("reconciled", "reconciled"),
+    ):
+        records.append(
+            {"model": name, "level": "granular", **measures(frame["realized"], frame[column])}
+        )
+        aggregate = frame.groupby("data")[["realized", column]].sum()
+        records.append(
+            {"model": name, "level": "aggregate", **measures(aggregate["realized"], aggregate[column])}
+        )
+    return pd.DataFrame(records)
+
+
+def global_shap_for_skus(local_shap: pd.DataFrame) -> pd.DataFrame:
+    if local_shap.empty:
+        return pd.DataFrame()
+    frame = local_shap.loc[local_shap["scope"].eq("historical")].copy()
+    if frame.empty:
+        frame = local_shap.copy()
+    summary = (
+        frame.groupby(["model", "feature"], as_index=False)
+        .agg(
+            mean_abs_shap=("abs_shap", "mean"),
+            mean_shap=("shap_value", "mean"),
+            positive_share=("shap_value", lambda values: values.gt(0).mean()),
+            sample_rows=("shap_value", "size"),
+            mean_base_value=("base_value", "mean"),
+        )
+    )
+    summary["rank"] = summary.groupby("model")["mean_abs_shap"].rank(
+        method="first", ascending=False
+    )
+    return summary
 
 
 def style_chart(chart: alt.Chart) -> alt.Chart:
@@ -346,6 +451,201 @@ def metric_summary(daily: pd.DataFrame, metrics: pd.DataFrame):
     columns[4].metric("Melhor modelo", best_name)
 
 
+
+def eda_view(sales: pd.DataFrame, profiles: pd.DataFrame):
+    page_title(
+        "EDA · Perfil da demanda",
+        "Frequência, variabilidade e comportamento das vendas por SKU.",
+        "02",
+    )
+    if sales.empty or profiles.empty:
+        st.warning("Execute `forecast-clean` e `forecast-eda` para gerar a análise.")
+        return
+
+    minimum = pd.to_datetime(sales["data"]).min().date()
+    maximum = pd.to_datetime(sales["data"]).max().date()
+    selected = st.sidebar.date_input(
+        "Período da EDA",
+        value=[minimum, maximum],
+        min_value=minimum,
+        max_value=maximum,
+        key="eda_period",
+    )
+    filtered = sales.copy()
+    if isinstance(selected, (list, tuple)) and len(selected) == 2:
+        filtered = filtered.loc[
+            pd.to_datetime(filtered["data"]).dt.date.between(selected[0], selected[1])
+        ]
+
+    positive = filtered.loc[filtered["venda"].gt(0)]
+    day_count = filtered["data"].nunique()
+    active_per_day = positive.groupby("data")["sku"].nunique()
+    metrics = st.columns(5)
+    metrics[0].metric("SKUs no recorte", f"{filtered['sku'].nunique():,}")
+    metrics[1].metric("Venda total", f"{filtered['venda'].sum():,.0f}")
+    metrics[2].metric(
+        "SKUs vendidos/dia",
+        f"{active_per_day.mean():,.0f}" if not active_per_day.empty else "—",
+    )
+    zero_share = filtered["venda"].le(0).mean() if len(filtered) else np.nan
+    metrics[3].metric("Registros sem venda", f"{zero_share:.1%}" if pd.notna(zero_share) else "—")
+    metrics[4].metric("Dias analisados", f"{day_count:,}")
+
+    daily_sales = (
+        filtered.groupby("data", as_index=False)
+        .agg(vendas=("venda", "sum"), skus_ativos=("sku", lambda values: values[filtered.loc[values.index, "venda"].gt(0)].nunique()))
+        .sort_values("data")
+    )
+    daily_sales["media_movel_7d"] = daily_sales["vendas"].rolling(7, min_periods=1).mean()
+
+    left, right = st.columns([1.7, 1])
+    with left:
+        temporal = daily_sales.melt(
+            "data",
+            value_vars=["vendas", "media_movel_7d"],
+            var_name="Série",
+            value_name="Vendas",
+        )
+        temporal["Série"] = temporal["Série"].map(
+            {"vendas": "Venda diária", "media_movel_7d": "Média móvel 7d"}
+        )
+        chart = (
+            alt.Chart(temporal)
+            .mark_line(point=alt.OverlayMarkDef(size=15), strokeWidth=2)
+            .encode(
+                x=alt.X("data:T", title="DATA"),
+                y=alt.Y("Vendas:Q", title="VENDAS"),
+                color=alt.Color(
+                    "Série:N",
+                    scale=alt.Scale(domain=["Venda diária", "Média móvel 7d"], range=[RED, INK]),
+                    title=None,
+                ),
+                tooltip=["data:T", "Série:N", alt.Tooltip("Vendas:Q", format=",.0f")],
+            )
+            .properties(height=330, title="Comportamento das vendas no período")
+            .interactive()
+        )
+        st.altair_chart(style_chart(chart), use_container_width=True)
+    with right:
+        active = (
+            alt.Chart(daily_sales)
+            .mark_area(line={"color": YELLOW}, color=YELLOW, opacity=0.28)
+            .encode(
+                x=alt.X("data:T", title="DATA"),
+                y=alt.Y("skus_ativos:Q", title="SKUS ATIVOS"),
+                tooltip=["data:T", alt.Tooltip("skus_ativos:Q", title="SKUs")],
+            )
+            .properties(height=330, title="SKUs com venda por dia")
+            .interactive()
+        )
+        st.altair_chart(style_chart(active), use_container_width=True)
+
+    st.subheader("Classificação ADI × CV²")
+    counts = (
+        profiles.groupby("categoria_demanda", observed=False)
+        .size()
+        .rename("skus")
+        .reset_index()
+    )
+    counts = counts.loc[counts["skus"].gt(0)]
+    counts["participacao"] = counts["skus"] / counts["skus"].sum()
+    domain = [category for category in CATEGORY_ORDER if category in counts["categoria_demanda"].astype(str).tolist()]
+    colors = [CATEGORY_COLORS[category] for category in domain]
+
+    left, right = st.columns([1, 1.5])
+    with left:
+        bars = (
+            alt.Chart(counts)
+            .mark_bar(size=25)
+            .encode(
+                y=alt.Y("categoria_demanda:N", sort=domain, title=None),
+                x=alt.X("skus:Q", title="SKUS"),
+                color=alt.Color(
+                    "categoria_demanda:N",
+                    scale=alt.Scale(domain=domain, range=colors),
+                    legend=None,
+                ),
+                tooltip=[
+                    alt.Tooltip("categoria_demanda:N", title="Categoria"),
+                    alt.Tooltip("skus:Q", title="SKUs"),
+                    alt.Tooltip("participacao:Q", title="Participação", format=".1%"),
+                ],
+            )
+            .properties(height=330, title="Distribuição dos perfis")
+        )
+        st.altair_chart(style_chart(bars), use_container_width=True)
+    with right:
+        scatter_data = profiles.loc[
+            np.isfinite(profiles["adi"]) & profiles["cv2"].notna()
+        ].copy()
+        if not scatter_data.empty:
+            adi_cap = max(ADI_THRESHOLD * 1.1, scatter_data["adi"].quantile(0.99))
+            cv2_cap = max(CV2_THRESHOLD * 1.1, scatter_data["cv2"].quantile(0.99))
+            scatter_data["adi_plot"] = scatter_data["adi"].clip(upper=adi_cap)
+            scatter_data["cv2_plot"] = scatter_data["cv2"].clip(upper=cv2_cap)
+            points = (
+                alt.Chart(scatter_data)
+                .mark_circle(size=48, opacity=0.58)
+                .encode(
+                    x=alt.X("adi_plot:Q", title="ADI · INTERVALO MÉDIO"),
+                    y=alt.Y("cv2_plot:Q", title="CV² · VARIABILIDADE"),
+                    color=alt.Color(
+                        "categoria_demanda:N",
+                        scale=alt.Scale(domain=domain, range=colors),
+                        title=None,
+                    ),
+                    tooltip=[
+                        "sku:N",
+                        alt.Tooltip("categoria_demanda:N", title="Categoria"),
+                        alt.Tooltip("adi:Q", format=".2f"),
+                        alt.Tooltip("cv2:Q", format=".2f"),
+                        alt.Tooltip("venda_total:Q", format=",.0f", title="Venda total"),
+                    ],
+                )
+            )
+            vline = alt.Chart(pd.DataFrame({"x": [ADI_THRESHOLD]})).mark_rule(
+                color=INK, strokeDash=[5, 4]
+            ).encode(x="x:Q")
+            hline = alt.Chart(pd.DataFrame({"y": [CV2_THRESHOLD]})).mark_rule(
+                color=INK, strokeDash=[5, 4]
+            ).encode(y="y:Q")
+            chart = (points + vline + hline).properties(
+                height=330, title="Mapa de frequência × variabilidade"
+            ).interactive()
+            st.altair_chart(style_chart(chart), use_container_width=True)
+
+    st.caption(
+        "ADI e CV² são calculados no histórico completo até a data de treinamento. "
+        "O período altera os indicadores temporais, mas não redefine a categoria."
+    )
+    table = profiles.copy()
+    table["percentual_dias_sem_venda"] = table["percentual_dias_sem_venda"].map(
+        lambda value: f"{value:.1%}"
+    )
+    st.dataframe(
+        table[
+            [
+                "sku", "categoria_demanda", "adi", "cv2", "dias_observados",
+                "dias_com_venda", "percentual_dias_sem_venda", "venda_total",
+                "venda_media_quando_ocorre",
+            ]
+        ].rename(
+            columns={
+                "sku": "SKU",
+                "categoria_demanda": "Categoria",
+                "adi": "ADI",
+                "cv2": "CV²",
+                "dias_observados": "Dias observados",
+                "dias_com_venda": "Dias com venda",
+                "percentual_dias_sem_venda": "% dias sem venda",
+                "venda_total": "Venda total",
+                "venda_media_quando_ocorre": "Venda média por ocorrência",
+            }
+        ),
+        hide_index=True,
+        use_container_width=True,
+    )
+
 def executive_view(daily, sku_data, metrics, global_shap):
     page_title(
         "Forecast de vendas por SKU",
@@ -514,6 +814,10 @@ def method_view():
         ## Problema
         Antecipar vendas diárias por SKU em um contexto de demanda irregular.
 
+        ## Exploração e perfis de demanda
+        ADI e CV² descrevem frequência e variabilidade por SKU. A segmentação é
+        exploratória, permanece fixa no histórico de treinamento e não implica causalidade.
+
         ## Dados confiáveis
         Malha temporal completa, identificação de imputações e atributos construídos
         sem utilizar informação futura.
@@ -554,20 +858,71 @@ def main():
     inject_style()
     masthead()
 
-    daily = existing_data("data/models/reconciled_daily_summary.csv", "data")
+    original_daily = existing_data("data/models/reconciled_daily_summary.csv", "data")
     sku_data = existing_data("data/models/reconciled_sku_forecast.csv", "data")
-    metrics = existing_data("data/models/metrics_report.csv")
+    original_metrics = existing_data("data/models/metrics_report.csv")
     global_shap = existing_data("data/explainability/shap_global.csv")
     local_shap = load_local_shap()
+    sales = existing_data("data/processed/vendas_processed.csv", "data")
+    profiles = existing_data("data/eda/sku_demand_profile.csv")
+
+    if profiles.empty and not sales.empty:
+        profiles = compute_demand_profiles(sales)
+    if not profiles.empty:
+        profiles["categoria_demanda"] = profiles["categoria_demanda"].astype(str)
+        available_categories = [
+            category
+            for category in CATEGORY_ORDER
+            if category in profiles["categoria_demanda"].unique()
+        ]
+        selected_categories = st.sidebar.multiselect(
+            "Categoria de demanda",
+            available_categories,
+            default=available_categories,
+            help="Classificação fixa pelo histórico completo: ADI × CV².",
+        )
+        selected_skus = set(
+            profiles.loc[
+                profiles["categoria_demanda"].isin(selected_categories), "sku"
+            ].astype(str)
+        )
+        profiles = profiles.loc[
+            profiles["categoria_demanda"].isin(selected_categories)
+        ].copy()
+        sales = filter_skus(sales, selected_skus)
+        sku_data = filter_skus(sku_data, selected_skus)
+        local_shap = filter_skus(local_shap, selected_skus)
+
+        all_selected = set(selected_categories) == set(available_categories)
+        if not all_selected:
+            global_filtered = global_shap_for_skus(local_shap)
+            if not global_filtered.empty:
+                global_shap = global_filtered
+    else:
+        st.sidebar.caption("Perfil ADI/CV² ainda não disponível.")
+
+    daily = aggregate_daily(sku_data)
+    if daily.empty:
+        daily = original_daily
+
+    historical_end = (
+        pd.to_datetime(sales["data"]).max()
+        if not sales.empty
+        else pd.Timestamp(datetime.date.today())
+    )
+    metrics = metrics_for_skus(sku_data, historical_end)
+    if metrics.empty:
+        metrics = original_metrics
 
     navigation = {
-        "01 Visão executiva": lambda: executive_view(
+        "01 EDA · Perfil da demanda": lambda: eda_view(sales, profiles),
+        "02 Visão executiva": lambda: executive_view(
             daily, sku_data, metrics, global_shap
         ),
-        "02 Desempenho temporal": lambda: temporal_view(daily),
-        "03 Explorador de SKU": lambda: sku_view(sku_data, local_shap),
-        "04 Modelos": lambda: models_view(metrics, global_shap),
-        "05 Método": method_view,
+        "03 Desempenho temporal": lambda: temporal_view(daily),
+        "04 Explorador de SKU": lambda: sku_view(sku_data, local_shap),
+        "05 Modelos": lambda: models_view(metrics, global_shap),
+        "06 Método": method_view,
     }
     selected = st.sidebar.radio("Navegação", list(navigation))
     navigation[selected]()
