@@ -96,6 +96,16 @@ def recursive_forecast(
     ]
     work = history[history_columns].copy()
     work["data"] = pd.to_datetime(work["data"])
+    # Apenas os 30 últimos registros por SKU são necessários para os lags e
+    # janelas atualmente definidos. O recorte evita recomputar todo o histórico
+    # a cada horizonte, sobretudo em bases com milhares de SKUs.
+    lookback = max((*DEFAULT_LAGS, *DEFAULT_WINDOWS))
+    work = (
+        work.sort_values(["sku", "data"])
+        .groupby("sku", group_keys=False, sort=False)
+        .tail(lookback)
+        .reset_index(drop=True)
+    )
 
     prediction_parts: list[pd.DataFrame] = []
     feature_parts: list[pd.DataFrame] = []
