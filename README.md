@@ -40,6 +40,7 @@ flowchart TD
     F --> H
     G --> I["C1D » ForecastLab"]
     H --> I
+    J --> I
 ```
 
 ## Estrutura do projeto
