@@ -140,7 +140,9 @@ def _local_artifact(
     repeated_ids["model"] = model_name
     repeated_ids["scope"] = scope
     repeated_ids["feature"] = np.tile(np.asarray(X.columns), row_count)
-    repeated_ids["feature_value"] = X.to_numpy().reshape(-1)
+    # O formato longo reúne atributos booleanos, inteiros e contínuos na mesma
+    # coluna. Normalizar para float mantém um schema Parquet estável.
+    repeated_ids["feature_value"] = X.to_numpy(dtype=float).reshape(-1)
     repeated_ids["shap_value"] = shap_values.reshape(-1)
     repeated_ids["abs_shap"] = np.abs(repeated_ids["shap_value"])
     repeated_ids["base_value"] = np.repeat(base_values, feature_count)

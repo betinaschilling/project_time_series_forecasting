@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from explainability.generate_shap import _global_artifact
+from explainability.generate_shap import _global_artifact, _local_artifact
 
 
 class AdditiveLightGBM:
@@ -22,3 +22,28 @@ def test_global_shap_validates_additivity_and_ranking():
     assert residual == 0.0
     assert artifact.iloc[0]["feature"] == "b"
     assert artifact.iloc[0]["rank"] == 1
+
+
+def test_local_shap_normalizes_mixed_feature_values_for_parquet(tmp_path):
+    X = pd.DataFrame({"a": [True, False], "b": [10, 20]})
+    identifiers = pd.DataFrame(
+        {
+            "sku": [1, 2],
+            "data": pd.to_datetime(["2026-01-01", "2026-01-02"]),
+            "horizon": [0, 0],
+        }
+    )
+
+    artifact, residual = _local_artifact(
+        identifiers,
+        X,
+        AdditiveLightGBM(),
+        "LightGBM",
+        "historical",
+    )
+    output = tmp_path / "shap_local.parquet"
+    artifact.to_parquet(output, index=False)
+    restored = pd.read_parquet(output)
+
+    assert residual == 0.0
+    assert restored["feature_value"].dtype.kind == "f"
