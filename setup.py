@@ -35,6 +35,7 @@ setup(
             "forecast-reconcile = models.reconcile:main",
             "forecast-evaluate = evaluation.metrics:main",
             "forecast-explain = explainability.generate_shap:main",
+            "forecast-eda = eda.demand_profile:main",
             "forecast-sku = scripts.run_sku_forecaster:main",
             "forecast-dashboard = visualization.app:main",
         ]
