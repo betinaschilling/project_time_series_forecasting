@@ -12,6 +12,7 @@ from pathlib import Path
 SRC_DIR = Path(__file__).resolve().parents[1]
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 import altair as alt
 import numpy as np
@@ -154,20 +155,28 @@ def page_title(title: str, subtitle: str, notebook: str):
 @st.cache_data
 def load_csv(path: str, date_col: str | None = None) -> pd.DataFrame:
     candidate = Path(path)
+    if not candidate.is_absolute():
+        candidate = PROJECT_ROOT / candidate
     file = next(candidate.glob("*.csv")) if candidate.is_dir() else candidate
     kwargs = {"parse_dates": [date_col]} if date_col else {}
     return pd.read_csv(file, **kwargs)
 
 
 @st.cache_data
-def load_local_shap() -> pd.DataFrame:
-    parquet = Path("data/explainability/shap_local.parquet")
-    csv = Path("data/explainability/shap_local.csv")
-    if parquet.exists():
-        return pd.read_parquet(parquet)
-    if csv.exists():
-        return pd.read_csv(csv, parse_dates=["data"])
-    return pd.DataFrame()
+def load_local_shap(cache_version: str = "v2-project-root") -> pd.DataFrame:
+    """Carrega SHAP local pela raiz do projeto e invalida caches pré-artefato."""
+    del cache_version
+    parquet = PROJECT_ROOT / "data/explainability/shap_local.parquet"
+    csv = PROJECT_ROOT / "data/explainability/shap_local.csv"
+    if parquet.is_file() and parquet.stat().st_size > 0:
+        frame = pd.read_parquet(parquet)
+    elif csv.is_file() and csv.stat().st_size > 0:
+        frame = pd.read_csv(csv, parse_dates=["data"])
+    else:
+        return pd.DataFrame()
+    if "data" in frame:
+        frame["data"] = pd.to_datetime(frame["data"])
+    return frame
 
 
 def existing_data(path: str, date_col: str | None = None) -> pd.DataFrame:
@@ -889,6 +898,9 @@ def main():
             default=available_categories,
             help="Classificação fixa pelo histórico completo: ADI × CV².",
         )
+        if not selected_categories:
+            st.sidebar.info("Nenhuma categoria selecionada: exibindo todas.")
+            selected_categories = available_categories
         selected_skus = set(
             profiles.loc[
                 profiles["categoria_demanda"].isin(selected_categories), "sku"
