@@ -1,0 +1,8 @@
+{
+  "global_file": "shap_global.csv",
+  "local_file": "shap_local.parquet",
+  "validation_file": "shap_validation.csv",
+  "horizon": 7,
+  "future_sku_coverage": 500,
+  "max_additivity_residual": 1.2278178473934531e-11
+}

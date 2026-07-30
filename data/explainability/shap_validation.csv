@@ -1,0 +1,7 @@
+model,scope,max_additivity_residual,rows
+LightGBM,global,9.094947017729282e-13,5000
+LightGBM,historical,1.4210854715202004e-12,5000
+LightGBM,forecast,1.2278178473934531e-11,3500
+CatBoost,global,4.547473508864641e-13,5000
+CatBoost,historical,1.5916157281026244e-12,5000
+CatBoost,forecast,1.8189894035458565e-12,3500
