@@ -4,6 +4,12 @@ Este README descreve em detalhes cada etapa do pipeline de forecasting de vendas
 
 ---
 
+## Links Úteis:
+
+[Clique para acessar o Dashboard com os modelos](https://sales-forecasting-for-sku.streamlit.app/)
+
+[Clique para acessar a Apresentação em PDF](https://github.com/betinaschilling/project_time_series_forecasting/blob/main/Forecasting%20de%20Vendas%20no%20Varejo%20de%20Moda.pdf)
+
 ## Sumário
 
 1. [Visão Geral](#visão-geral)  
@@ -139,9 +145,10 @@ forecast-reconcile
 forecast-evaluate
 forecast-sku
 forecast-dashboard
+```
 
 
 ## Site para acesso a aplicaçao:
-https://sales-forecasting-for-sku.streamlit.app/
+[Clique para acessar o Dashboard com os modelos](https://sales-forecasting-for-sku.streamlit.app/)
 
 
