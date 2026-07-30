@@ -23,8 +23,9 @@ Este README descreve em detalhes cada etapa do pipeline de forecasting de vendas
    6. [Reconciliação (`reconcile.py`)](#6-reconciliação-reconcilepy)  
    7. [Avaliação de Métricas (`metrics.py`)](#7-avaliação-de-métricas-metricspy)  
    8. [Dashboard Streamlit (`app.py`)](#8-dashboard-streamlit-apppy)  
+   9. [Explicabilidade com SHAP](#9-explicabilidade-com-shap)  
 4. [Como Executar](#como-executar)  
-5. [Exemplos de Logs](#exemplos-de-logs)  
+5. [Artefatos SHAP publicados](#artefatos-shap-publicados)  
 
 ---
 
@@ -39,6 +40,7 @@ Construímos um pipeline completo que:
 - **Reconciliação**: média simples entre previsões granular  
 - **Avaliação**: RMSE, MAE, MAPE, WMAPE e R² em granular e agregado  
 - **Visualização**: Streamlit com filtros, tabelas e gráficos  
+- **Explicabilidade**: SHAP global e local, acompanhado de validação e manifesto de rastreabilidade  
 
 Cada etapa é acionada por um script CLI instalado via `setup.py` (ex: `forecast-ingest`, `forecast-features`, `forecast-train-lgbm`, etc.).
 
@@ -131,6 +133,30 @@ Cada etapa é acionada por um script CLI instalado via `setup.py` (ex: `forecast
   - `SKUForecaster.save()` – salva o resultado em `data/models/forecast_sku_<SKU>.csv` com colunas:  
     `sku`, `data`, `lgbm_fitted`, `cb_fitted`, `lgbm_forecast`, `cb_forecast`.  
 ---
+
+
+### 9. Explicabilidade com SHAP
+
+- **Objetivo**: explicar a contribuição das features nas previsões dos modelos LightGBM e CatBoost, tanto de forma global quanto para previsões específicas.
+- **Escopo validado**: 5.696 SKUs; amostra global de 5.000 observações por modelo; explicações locais para 500 SKUs ativos em 7 horizontes futuros.
+- **Leitura dos resultados**:
+  - `shap_value > 0`: a feature aumenta a previsão em relação ao valor-base do modelo.
+  - `shap_value < 0`: a feature reduz a previsão.
+  - `mean_abs_shap`: importância global média em valor absoluto; mede intensidade, não direção.
+- **Atenção analítica**: `is_imputed` aparece como o principal driver global. Isso indica forte sensibilidade do modelo à ausência/imputação de observações e deve ser interpretado como sinal de qualidade e disponibilidade dos dados, não como causa de vendas.
+
+---
+
+## Artefatos SHAP publicados
+
+| Arquivo | Finalidade | Formato |
+|---|---|---|
+| `shap_global.csv` | Importância global das features por modelo, ordenada pela magnitude média dos valores SHAP. | CSV |
+| `shap_local.parquet` | Contribuições locais por SKU, data/horizonte, modelo e feature. | Parquet |
+| `shap_validation.csv` | Evidências de consistência e validações executadas sobre os artefatos. | CSV |
+| `manifest.json` | Metadados de geração, esquema, volumetria e rastreabilidade da execução. | JSON |
+
+O CSV global e o CSV de validação podem ser inspecionados diretamente no GitHub. O Parquet local é mantido para preservar a volumetria com tipos e compactação adequados; ele não é necessário para uma leitura rápida dos resultados globais.
 
 ## Como Executar
 
