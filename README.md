@@ -16,6 +16,7 @@ As explicações SHAP permitem investigar quais atributos sustentam cada previs�
 - ingestão de CSV e persistência intermediária em CSV e Delta Lake;
 - expansão da malha diária por SKU e preenchimento de vendas ausentes com zero;
 - criação de lags, médias móveis, calendário e indicadores de imputação;
+- EDA temporal e classificação de demanda por SKU com ADI × CV²;
 - validação temporal com `TimeSeriesSplit`;
 - forecast recursivo de sete dias por LightGBM e CatBoost;
 - reconciliação por média simples entre os dois modelos;
@@ -29,6 +30,7 @@ As explicações SHAP permitem investigar quais atributos sustentam cada previs�
 flowchart TD
     A["Vendas brutas<br/>CSV"] --> B["Ingestão<br/>Spark + Delta"]
     B --> C["Limpeza<br/>malha SKU × data"]
+    C --> J["EDA<br/>ADI × CV²"]
     C --> D["Features<br/>lags, médias e calendário"]
     D --> E["LightGBM"]
     D --> F["CatBoost"]
@@ -62,6 +64,8 @@ project_time_series_forecasting/
 │   ├── features/
 │   │   ├── vendas_features.csv/
 │   │   └── vendas_features.delta/
+│   ├── eda/
+│   │   └── sku_demand_profile.csv
 │   ├── models/
 │   │   ├── lgbm_model.pkl
 │   │   ├── lgbm_model.pkl.metadata.json
@@ -87,6 +91,8 @@ project_time_series_forecasting/
 │   ├── features/
 │   │   ├── make_features.py
 │   │   └── forecasting_features.py
+│   ├── eda/
+│   │   └── demand_profile.py
 │   ├── models/
 │   │   ├── train_lgbm.py
 │   │   ├── train_catboost.py
@@ -100,7 +106,8 @@ project_time_series_forecasting/
 │   └── visualization/
 │       └── app.py
 └── tests/
-    └── test_forecasting_features.py
+    ├── test_forecasting_features.py
+    └── test_demand_profile.py
 ```
 
 > O Spark salva saídas CSV como diretórios contendo arquivos `part-*.csv`; por isso algumas entradas aparecem com uma barra final.
@@ -116,6 +123,30 @@ A entrada padrão é `data/raw/vendas.csv`, com os campos:
 | `venda` | Quantidade ou medida de demanda modelada. |
 
 Na limpeza, duplicidades de `sku + data` são agregadas por soma. Em seguida, cria-se uma sequência diária completa entre a primeira e a última observação de cada SKU. Datas ausentes recebem `venda = 0` e são identificadas por `is_imputed = True`.
+
+## EDA e perfil da demanda
+
+A etapa `forecast-eda` calcula um perfil fixo por SKU sobre todo o histórico disponível. A classificação segue os limiares ADI = 1,32 e CV² = 0,49:
+
+| Categoria | Regra | Leitura |
+|---|---|---|
+| Regular | ADI < 1,32 e CV² < 0,49 | Venda frequente e volume estável. |
+| Errática | ADI < 1,32 e CV² ≥ 0,49 | Venda frequente e volume variável. |
+| Intermitente | ADI ≥ 1,32 e CV² < 0,49 | Venda espaçada e volume relativamente estável quando ocorre. |
+| Irregular | ADI ≥ 1,32 e CV² ≥ 0,49 | Venda espaçada e volume variável. |
+
+O ADI é calculado como dias calendários observados divididos por dias com venda. O CV² considera apenas demandas positivas, evitando contar os zeros duas vezes. SKUs sem ocorrência positiva recebem a categoria `Sem demanda`.
+
+O dashboard adiciona:
+
+- filtro global de categoria, aplicado às páginas de EDA, visão executiva, série temporal, SKU, métricas e SHAP local;
+- comportamento diário das vendas e média móvel de sete dias;
+- quantidade de SKUs ativos por dia;
+- distribuição dos perfis;
+- mapa ADI × CV² com linhas de corte;
+- tabela auditável das estatísticas de cada SKU.
+
+O filtro de período altera os indicadores temporais, mas não recalcula a categoria. Essa decisão mantém o segmento estável durante a navegação.
 
 ## Engenharia de atributos
 
@@ -232,6 +263,7 @@ Com `data/raw/vendas.csv` disponível, execute o pipeline na ordem:
 ```bash
 forecast-load
 forecast-clean
+forecast-eda
 forecast-features
 forecast-train-lgbm
 forecast-train-cb
@@ -264,6 +296,9 @@ A aplicação publicada está disponível em [sales-forecasting-for-sku.streamli
 
 Os testes disponíveis verificam que:
 
+- as quatro categorias ADI × CV² respeitam os limiares metodológicos;
+- o ADI usa a cobertura calendária e o CV² ignora dias de venda zero;
+- SKUs sem demanda positiva são tratados explicitamente;
 - lags e médias móveis não usam o target da própria linha;
 - o próximo dia é criado antes da previsão;
 - o forecast recursivo reaproveita a previsão anterior;
