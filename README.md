@@ -1,167 +1,235 @@
-# Projeto de Forecasting de Vendas
+# C1D » ForecastLab
 
-Este README descreve em detalhes cada etapa do pipeline de forecasting de vendas, as motivações de design, as principais funções envolvidas e exemplos de logs de execução.
+Pipeline de previsão diária de vendas no varejo por SKU, com processamento em Spark/Delta Lake, modelos LightGBM e CatBoost, reconciliação, avaliação, explicabilidade SHAP e dashboard Streamlit.
 
----
+- Dashboard: [sales-forecasting-for-sku.streamlit.app](https://sales-forecasting-for-sku.streamlit.app/)
+- Apresentação: [Forecasting de Vendas no Varejo de Moda](https://github.com/betinaschilling/project_time_series_forecasting/blob/main/Forecasting%20de%20Vendas%20no%20Varejo%20de%20Moda.pdf)
 
-## Links Úteis:
+## Visão geral
 
-[Clique para acessar o Dashboard com os modelos](https://sales-forecasting-for-sku.streamlit.app/)
+O projeto transforma o histórico bruto de vendas em previsões diárias por SKU. O pipeline completa datas ausentes, registra imputações, constrói atributos temporais sem vazamento do target, treina dois modelos de gradient boosting e combina suas previsões por média simples.
 
-[Clique para acessar a Apresentação em PDF](https://github.com/betinaschilling/project_time_series_forecasting/blob/main/Forecasting%20de%20Vendas%20no%20Varejo%20de%20Moda.pdf)
+As explicações SHAP permitem investigar quais atributos sustentam cada previsão, no histórico e no horizonte futuro. O dashboard C1D » ForecastLab reúne resultados, métricas e análises em uma interface editorial.
 
-## Sumário
+### Principais capacidades
 
-1. [Visão Geral](#visão-geral)  
-2. [Estrutura de Pastas e Scripts](#estrutura-de-pastas-e-scripts)  
-3. [Etapas do Pipeline](#etapas-do-pipeline)  
-   1. [Ingestão (`ingest.py`)](#1-ingestão-ingestpy)  
-   2. [Pré-processamento (`preprocess.py`)](#2-pré-processamento-preprocesspy)  
-   3. [Geração de Features (`make_features.py`)](#3-geração-de-features-make_featurespy)  
-   4. [Treino LightGBM (`train_lgbm.py`)](#4-treino-lightgbm-train_lgbmpy)  
-   5. [Treino CatBoost (`train_catboost.py`)](#5-treino-catboost-train_catboostpy)  
-   6. [Reconciliação (`reconcile.py`)](#6-reconciliação-reconcilepy)  
-   7. [Avaliação de Métricas (`metrics.py`)](#7-avaliação-de-métricas-metricspy)  
-   8. [Dashboard Streamlit (`app.py`)](#8-dashboard-streamlit-apppy)  
-   9. [Explicabilidade com SHAP](#9-explicabilidade-com-shap)  
-4. [Como Executar](#como-executar)  
-5. [Artefatos SHAP publicados](#artefatos-shap-publicados)  
+- ingestão de CSV e persistência intermediária em CSV e Delta Lake;
+- expansão da malha diária por SKU e preenchimento de vendas ausentes com zero;
+- criação de lags, médias móveis, calendário e indicadores de imputação;
+- validação temporal com `TimeSeriesSplit`;
+- forecast recursivo de sete dias por LightGBM e CatBoost;
+- reconciliação por média simples entre os dois modelos;
+- métricas nos níveis granular e agregado;
+- explicabilidade SHAP global, histórica e futura;
+- dashboard Streamlit para exploração dos resultados.
 
----
+## Arquitetura do pipeline
 
-## Visão Geral
+```mermaid
+flowchart TD
+    A["Vendas brutas<br/>CSV"] --> B["Ingestão<br/>Spark + Delta"]
+    B --> C["Limpeza<br/>malha SKU × data"]
+    C --> D["Features<br/>lags, médias e calendário"]
+    D --> E["LightGBM"]
+    D --> F["CatBoost"]
+    E --> G["Reconciliação e métricas"]
+    F --> G
+    E --> H["SHAP"]
+    F --> H
+    G --> I["C1D » ForecastLab"]
+    H --> I
+```
 
-Construímos um pipeline completo que:
+## Estrutura do projeto
 
-- **Ingestão** de CSV bruto → Delta  
-- **Pré-processamento**: expansão de datas, zero-fill, limpeza  
-- **Feature Engineering**: lags, médias móveis, calendário, flags  
-- **Modelagem**: LightGBM e CatBoost (in-sample + rolling forecast)  
-- **Reconciliação**: média simples entre previsões granular  
-- **Avaliação**: RMSE, MAE, MAPE, WMAPE e R² em granular e agregado  
-- **Visualização**: Streamlit com filtros, tabelas e gráficos  
-- **Explicabilidade**: SHAP global e local, acompanhado de validação e manifesto de rastreabilidade  
+A árvore abaixo substitui o antigo print e mostra os componentes relevantes do repositório. Arquivos dentro de `data/` são entradas ou artefatos produzidos pelo pipeline.
 
-Cada etapa é acionada por um script CLI instalado via `setup.py` (ex: `forecast-ingest`, `forecast-features`, `forecast-train-lgbm`, etc.).
+```text
+project_time_series_forecasting/
+├── README.md
+├── setup.py
+├── requirements.txt
+├── Forecasting de Vendas no Varejo de Moda.pdf
+├── data/
+│   ├── raw/
+│   │   └── vendas.csv
+│   ├── interim/
+│   │   ├── vendas_interim.csv/
+│   │   └── vendas_interim.delta/
+│   ├── processed/
+│   │   ├── vendas_processed.csv/
+│   │   └── vendas_processed.delta/
+│   ├── features/
+│   │   ├── vendas_features.csv/
+│   │   └── vendas_features.delta/
+│   ├── models/
+│   │   ├── lgbm_model.pkl
+│   │   ├── lgbm_model.pkl.metadata.json
+│   │   ├── catboost_model.cbm
+│   │   ├── catboost_model.cbm.metadata.json
+│   │   ├── ml_forecast.csv
+│   │   ├── catboost_forecast.csv
+│   │   ├── reconciled_sku_forecast.csv
+│   │   ├── reconciled_daily_summary.csv
+│   │   └── metrics_report.csv
+│   ├── explainability/
+│   │   ├── shap_global.csv
+│   │   ├── shap_local.parquet
+│   │   ├── shap_validation.csv
+│   │   └── manifest.json
+│   └── logs/
+│       └── pipeline.log
+├── src/
+│   ├── ingestion/
+│   │   └── loader.py
+│   ├── preprocessing/
+│   │   └── clean.py
+│   ├── features/
+│   │   ├── make_features.py
+│   │   └── forecasting_features.py
+│   ├── models/
+│   │   ├── train_lgbm.py
+│   │   ├── train_catboost.py
+│   │   └── reconcile.py
+│   ├── evaluation/
+│   │   └── metrics.py
+│   ├── explainability/
+│   │   └── generate_shap.py
+│   ├── scripts/
+│   │   └── run_sku_forecaster.py
+│   └── visualization/
+│       └── app.py
+└── tests/
+    └── test_forecasting_features.py
+```
 
----
+> O Spark salva saídas CSV como diretórios contendo arquivos `part-*.csv`; por isso algumas entradas aparecem com uma barra final.
 
-## Estrutura de Pastas e Scripts
+## Dados e preparação
 
-<img width="739" height="859" alt="image" src="https://github.com/user-attachments/assets/31486475-270e-4abf-92df-16318fdf3350" />
+A entrada padrão é `data/raw/vendas.csv`, com os campos:
 
+| Campo | Descrição |
+|---|---|
+| `sku` | Identificador do produto. |
+| `data_venda` | Data da venda na base bruta. |
+| `venda` | Quantidade ou medida de demanda modelada. |
 
+Na limpeza, duplicidades de `sku + data` são agregadas por soma. Em seguida, cria-se uma sequência diária completa entre a primeira e a última observação de cada SKU. Datas ausentes recebem `venda = 0` e são identificadas por `is_imputed = True`.
 
----
+## Engenharia de atributos
 
-## Etapas do Pipeline
+O módulo `features.forecasting_features` centraliza a mesma definição de atributos usada no treino, no forecast recursivo e no SHAP.
 
-### 1. Ingestão (`ingest.py`)
-- **Objetivo**: ler CSV bruto, salvar em CSV/Delta intermediário.  
-- **Função principal**: `Ingestor.run()`.  
-- **Por quê?**: garantir rastreabilidade e persistência de raw → interim.
+| Grupo | Atributos |
+|---|---|
+| Defasagens | `lag_1`, `lag_7`, `lag_14` |
+| Médias móveis | `roll_mean_7`, `roll_mean_14`, `roll_mean_30` |
+| Calendário | `weekday`, `is_weekend`, `month` |
+| Qualidade | `is_imputed`, `was_imputed` |
 
-### 2. Pré-processamento (`preprocess.py`)
-- **Objetivo**: agregação, malha completa de datas, imputação zeros.  
-- **Funções**:
-  - `expand_dates()`
-  - `fill_missing()`
-- **Por quê?**: criar histórico consistente por SKU/data.
+As defasagens e médias móveis utilizam somente valores anteriores à linha prevista. No forecast recursivo, cada nova previsão é incorporada ao histórico apenas depois de os atributos daquele horizonte serem calculados.
 
-### 3. Geração de Features (`make_features.py`)
-- **Objetivo**: criar lags, rolling means, calendário e flags.  
-- **Passos**:
-  1. `add_imputation_flag()`  
-  2. `add_lag_features()`  
-  3. `add_rolling_features()`  
-  4. `add_calendar_features()`  
-- **Entrada**: `FeatureEngineer.run()`.  
+## Modelagem
 
-### 4. Treino LightGBM (`train_lgbm.py`)
-- **Objetivo**: treinar, cross-validate e fazer rolling forecast.  
-- **Funções**:
-  - `cross_validate(df)`
-  - `train_and_save(df)`
-  - `rolling_forecast(model, df)`
-- **Por quê?**: modelo rápido e robusto.
+### LightGBM e CatBoost
 
-### 5. Treino CatBoost (`train_catboost.py`)
-- Mesma lógica do LightGBM, mas usando `CatBoostRegressor`.  
-- **Funções**: `cross_validate`, `train_and_save`, `predict_future`.
+Os dois modelos:
 
-### 6. Reconciliação (`reconcile.py`)
-- **Objetivo**: unir forecasts LGBM + CatBoost + histórico → granular e daily.  
-- **Funções**:
-  - `load_data()`
-  - `compute_reconciled()`
-  - `save_outputs()`
+1. leem a base de features;
+2. regeneram os atributos pela implementação compartilhada;
+3. executam validação temporal com `TimeSeriesSplit`;
+4. treinam no histórico completo;
+5. persistem modelo e metadados;
+6. geram fitted values e previsão recursiva para o horizonte configurado.
 
-### 7. Avaliação de Métricas (`metrics.py`)
-- **Objetivo**: calcular RMSE, MAE, MAPE, WMAPE, R² em granular e agregado.  
-- **Funções**:
-  - `load_all()`
-  - `_compute_metrics(y_true, y_pred)`
-  - `compute()`
-  - `save(df_metrics)`
+O horizonte padrão é de sete dias e o `random_state` é 42.
 
-### 8. Dashboard Streamlit (`app.py`)
-- **Visões**:
-  1. **Resumo APlicação**  
-  2. **Resumo Diário**  
-  3. **Por SKU**  
-  4. **Métricas**  
-- **Entrada**: `forecast-dashboard` → `visualization.app.main()`.
+### Reconciliação
 
+A previsão reconciliada por SKU é uma média simples:
 
-### 9. Forecast por SKU
-- **O quê**  
-  Gera previsões diárias de vendas para um único SKU, incluindo:  
-  1. **Fitted** (in-sample) – aplica os modelos treinados sobre o histórico de features.  
-  2. **Forecast** (horizonte futuro) – reconstrói recursivamente as features dos próximos dias e prevê as vendas.
+```text
+reconciled = (lgbm_pred + cb_pred) / 2
+```
 
-- **Por que**  
-  Permite analisar individualmente o comportamento de cada produto, validar o ajuste dos modelos no histórico e planejar estoque específico por SKU.
+Também é produzido um resumo diário agregado com realizado, LightGBM, CatBoost e reconciliado.
 
-- **Principais funções/métodos**  
-  - `main()` – recebe o código do SKU e caminhos de entrada/saída, instancia `SKUForecaster` e chama `run()`.  
-  - `SKUForecaster.load_models()` – carrega os objetos LightGBM e CatBoost do disco.  
-  - `SKUForecaster.load_data()` – lê e filtra histórico processado e features apenas para o SKU selecionado.  
-  - `SKUForecaster.forecast()` –  
-    - monta previsões “in-sample” (fitted) usando todo o histórico de features,  
-    - gera previsões recursivas para o horizonte configurado (por padrão 7 dias),  
-    - concatena ambos em um único DataFrame.  
-  - `SKUForecaster.save()` – salva o resultado em `data/models/forecast_sku_<SKU>.csv` com colunas:  
-    `sku`, `data`, `lgbm_fitted`, `cb_fitted`, `lgbm_forecast`, `cb_forecast`.  
----
+### Avaliação
 
+As métricas são calculadas para LightGBM, CatBoost e reconciliado, tanto por SKU/data quanto no agregado diário:
 
-### 9. Explicabilidade com SHAP
+- RMSE;
+- MAE;
+- MAPE;
+- WMAPE;
+- R².
 
-- **Objetivo**: explicar a contribuição das features nas previsões dos modelos LightGBM e CatBoost, tanto de forma global quanto para previsões específicas.
-- **Escopo validado**: 5.696 SKUs; amostra global de 5.000 observações por modelo; explicações locais para 500 SKUs ativos em 7 horizontes futuros.
-- **Leitura dos resultados**:
-  - `shap_value > 0`: a feature aumenta a previsão em relação ao valor-base do modelo.
-  - `shap_value < 0`: a feature reduz a previsão.
-  - `mean_abs_shap`: importância global média em valor absoluto; mede intensidade, não direção.
-- **Atenção analítica**: `is_imputed` aparece como o principal driver global. Isso indica forte sensibilidade do modelo à ausência/imputação de observações e deve ser interpretado como sinal de qualidade e disponibilidade dos dados, não como causa de vendas.
+## Explicabilidade SHAP
 
----
+A etapa de explicabilidade utiliza as contribuições nativas dos modelos:
 
-## Artefatos SHAP publicados
+- LightGBM: `predict(..., pred_contrib=True)`;
+- CatBoost: `get_feature_importance(..., type="ShapValues")`.
 
-| Arquivo | Finalidade | Formato |
-|---|---|---|
-| `shap_global.csv` | Importância global das features por modelo, ordenada pela magnitude média dos valores SHAP. | CSV |
-| `shap_local.parquet` | Contribuições locais por SKU, data/horizonte, modelo e feature. | Parquet |
-| `shap_validation.csv` | Evidências de consistência e validações executadas sobre os artefatos. | CSV |
-| `manifest.json` | Metadados de geração, esquema, volumetria e rastreabilidade da execução. | JSON |
+Isso mantém o dashboard sem dependência adicional do pacote `shap`. Para cada observação:
 
-O CSV global e o CSV de validação podem ser inspecionados diretamente no GitHub. O Parquet local é mantido para preservar a volumetria com tipos e compactação adequados; ele não é necessário para uma leitura rápida dos resultados globais.
+```text
+prediction ≈ base_value + soma(shap_value)
+```
 
-## Como Executar
+### Escopo publicado
+
+- 5.696 SKUs presentes na base processada;
+- 5.000 observações recentes por modelo para importância global;
+- 5.000 observações históricas por modelo para explicações locais;
+- 500 SKUs ativos em sete horizontes futuros;
+- maior resíduo de aditividade observado: aproximadamente `1,23 × 10⁻¹¹`.
+
+### Artefatos
+
+| Arquivo | Conteúdo |
+|---|---|
+| `data/explainability/shap_global.csv` | Ranking global por modelo, magnitude média, direção média e proporção de contribuições positivas. |
+| `data/explainability/shap_local.parquet` | Contribuições locais em formato longo por SKU, data, horizonte, modelo e feature. |
+| `data/explainability/shap_validation.csv` | Resíduo máximo de aditividade e quantidade de linhas por modelo e escopo. |
+| `data/explainability/manifest.json` | Arquivos, horizonte, cobertura futura e resultado máximo de validação. |
+
+### Como interpretar
+
+- `shap_value > 0`: a feature eleva a previsão em relação ao valor-base;
+- `shap_value < 0`: a feature reduz a previsão;
+- `mean_abs_shap`: intensidade global da contribuição, independentemente da direção;
+- `positive_share`: frequência com que a contribuição foi positiva na amostra.
+
+Nos artefatos atuais, `is_imputed` é o principal driver global. O resultado mostra que os modelos são sensíveis à disponibilidade e à imputação dos dados. Ele deve ser lido como sinal de qualidade do histórico, e não como relação causal com vendas.
+
+## Instalação
+
+Requisitos principais:
+
+- Python 3.10 ou superior;
+- Java compatível com a instalação do PySpark;
+- dependências listadas em `requirements.txt`.
 
 ```bash
-pip install -e .        # instala dependências e entry points
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -e .
+```
+
+No Windows PowerShell, ative o ambiente com:
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+## Execução
+
+Com `data/raw/vendas.csv` disponível, execute o pipeline na ordem:
+
+```bash
 forecast-load
 forecast-clean
 forecast-features
@@ -169,12 +237,54 @@ forecast-train-lgbm
 forecast-train-cb
 forecast-reconcile
 forecast-evaluate
-forecast-sku
+forecast-explain
 forecast-dashboard
 ```
 
+Os comandos aceitam argumentos para substituir caminhos e parâmetros padrão. Consulte cada interface com `--help`, por exemplo:
 
-## Site para acesso a aplicaçao:
-[Clique para acessar o Dashboard com os modelos](https://sales-forecasting-for-sku.streamlit.app/)
+```bash
+forecast-explain --help
+forecast-explain --horizon 7 --max-future-skus 500
+```
 
+Para gerar a análise de um SKU específico:
 
+```bash
+forecast-sku 12345
+```
+
+## Dashboard
+
+O comando `forecast-dashboard` inicia o C1D » ForecastLab. A aplicação carrega os artefatos existentes e oferece visões do portfólio, resultados agregados, análise por SKU, métricas e explicabilidade.
+
+A aplicação publicada está disponível em [sales-forecasting-for-sku.streamlit.app](https://sales-forecasting-for-sku.streamlit.app/).
+
+## Testes
+
+Os testes disponíveis verificam que:
+
+- lags e médias móveis não usam o target da própria linha;
+- o próximo dia é criado antes da previsão;
+- o forecast recursivo reaproveita a previsão anterior;
+- o histórico fora da janela necessária é descartado.
+
+Para executar:
+
+```bash
+pip install pytest
+pytest -q
+```
+
+## Limitações e próximos passos
+
+- a imputação com zero pode representar ausência de venda ou ausência de registro; a distinção depende da semântica da fonte;
+- a validação atual usa `TimeSeriesSplit`, mas pode evoluir para backtesting por janelas móveis e horizontes explícitos;
+- a reconciliação é uma média simples e ainda não pondera desempenho recente por modelo ou SKU;
+- MAPE pode ser instável em séries com muitos zeros; WMAPE deve ser analisado em conjunto;
+- SHAP explica o comportamento do modelo e não estabelece causalidade;
+- variáveis comerciais, preço, promoção, estoque, feriados e clima podem ampliar o poder explicativo e preditivo.
+
+## Autoria
+
+Cheila Santos — projeto de forecasting de demanda, engenharia de dados e explicabilidade aplicada ao varejo.
