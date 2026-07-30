@@ -52,6 +52,8 @@ O valor absoluto impede que contribuições positivas e negativas se cancelem.
 - A amostra global privilegia observações recentes e tem tamanho configurável.
 - A explicação local do forecast respeita os atributos de cada horizonte
   recursivo.
+- Por padrão, o artefato local futuro cobre os 500 SKUs com maior venda nos
+  30 dias recentes. O limite pode ser alterado com `--max-future-skus`.
 - Uma contribuição positiva indica aumento em relação ao valor-base do modelo,
   não o efeito de uma intervenção.
 - Atributos correlacionados podem compartilhar ou redistribuir importância.
