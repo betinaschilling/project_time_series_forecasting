@@ -156,6 +156,7 @@ def generate_explanations(
     horizon: int = 7,
     max_global_rows: int = 5000,
     max_local_rows: int = 5000,
+    max_future_skus: int = 500,
     local_days: int = 30,
     random_state: int = 42,
 ) -> dict:
@@ -219,9 +220,19 @@ def generate_explanations(
             }
         )
 
+        recent_cutoff = featured["data"].max() - pd.Timedelta(days=29)
+        active_skus = (
+            featured.loc[featured["data"].ge(recent_cutoff)]
+            .groupby("sku")["venda"]
+            .sum()
+            .sort_values(ascending=False)
+            .head(max_future_skus)
+            .index
+        )
+        future_history = featured.loc[featured["sku"].isin(active_skus)]
         _, future_features = recursive_forecast(
             model=model,
-            history=featured,
+            history=future_history,
             feature_columns=feature_columns,
             horizon=horizon,
         )
@@ -261,6 +272,7 @@ def generate_explanations(
         "local_file": local_file,
         "validation_file": "shap_validation.csv",
         "horizon": horizon,
+        "future_sku_coverage": min(max_future_skus, featured["sku"].nunique()),
         "max_additivity_residual": float(
             validation_output["max_additivity_residual"].max()
         ),
@@ -281,6 +293,7 @@ def main():
     parser.add_argument("--horizon", type=int, default=7)
     parser.add_argument("--max-global-rows", type=int, default=5000)
     parser.add_argument("--max-local-rows", type=int, default=5000)
+    parser.add_argument("--max-future-skus", type=int, default=500)
     parser.add_argument("--local-days", type=int, default=30)
     args = parser.parse_args()
 
@@ -292,6 +305,7 @@ def main():
         horizon=args.horizon,
         max_global_rows=args.max_global_rows,
         max_local_rows=args.max_local_rows,
+        max_future_skus=args.max_future_skus,
         local_days=args.local_days,
     )
     print(json.dumps(manifest, ensure_ascii=False, indent=2))
